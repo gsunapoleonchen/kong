@@ -9,6 +9,7 @@ local tostring = tostring
 local ipairs = ipairs
 local math = math
 local kong = kong
+local type = type
 local null = ngx.null
 local ngx = ngx
 
@@ -41,11 +42,24 @@ local function warmup_dns(premature, hosts, count)
 end
 
 
-local function cache_warmup_single_entity(dao)
+function cache_warmup.single_entity(dao, entity)
   local entity_name = dao.schema.name
-
   local cache_store = constants.ENTITY_CACHE_STORE[entity_name]
   local cache = kong[cache_store]
+  local cache_key = dao:cache_key(entity)
+
+  local ok, err = cache:safe_set(cache_key, entity)
+  if not ok then
+    return nil, err
+  end
+
+  return true
+end
+
+
+function cache_warmup.single_dao(dao)
+  local entity_name = dao.schema.name
+  local cache_store = constants.ENTITY_CACHE_STORE[entity_name]
 
   ngx.log(ngx.NOTICE, "Preloading '", entity_name, "' into the ", cache_store, "...")
 
@@ -72,9 +86,7 @@ local function cache_warmup_single_entity(dao)
       end
     end
 
-    local cache_key = dao:cache_key(entity)
-
-    local ok, err = cache:safe_set(cache_key, entity)
+    local ok, err = cache_warmup.single_entity(dao, entity)
     if not ok then
       return nil, err
     end
@@ -103,9 +115,18 @@ function cache_warmup.execute(entities)
     if entity_name == "routes" then
       -- do not spend shm memory by caching individual Routes entries
       -- because the routes are kept in-memory by building the router object
-      kong.log.notice("the 'routes' entry is ignored in the list of ",
+      kong.log.notice("the 'routes' entity is ignored in the list of ",
                       "'db_cache_warmup_entities' because Kong ",
                       "caches routes in memory separately")
+      goto continue
+    end
+
+    if entity_name == "plugins" then
+      -- to speed up the init, the plugins are warmed up upon initial
+      -- plugin iterator build
+      kong.log.notice("the 'plugins' entity is ignored in the list of ",
+                      "'db_cache_warmup_entities' because Kong ",
+                      "pre-warms plugins automatically")
       goto continue
     end
 
@@ -116,7 +137,7 @@ function cache_warmup.execute(entities)
       goto continue
     end
 
-    local ok, err = cache_warmup_single_entity(dao)
+    local ok, err = cache_warmup.single_dao(dao)
     if not ok then
       if err == "no memory" then
         kong.log.warn("cache warmup has been stopped because cache ",

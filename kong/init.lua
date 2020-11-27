@@ -445,7 +445,6 @@ function Kong.init()
   end
 
   assert(db:connect())
-  assert(db.plugins:check_db_against_config(config.loaded_plugins))
 
   -- LEGACY
   singletons.dns = dns(config)
@@ -472,7 +471,6 @@ function Kong.init()
   end
 
   if kong.configuration.database == "off" then
-
     local err
     declarative_entities, err, declarative_meta = parse_declarative_config(kong.configuration)
     if not declarative_entities then
@@ -483,10 +481,6 @@ function Kong.init()
     local default_ws = db.workspaces:select_by_name("default")
     kong.default_workspace = default_ws and default_ws.id
 
-    local ok, err = runloop.build_plugins_iterator("init")
-    if not ok then
-      error("error building initial plugins: " .. tostring(err))
-    end
 
     assert(runloop.build_router("init"))
   end
@@ -586,6 +580,11 @@ function Kong.init_worker()
   end
 
   runloop.init_worker.before()
+
+  local ok, err = runloop.build_plugins_iterator("init")
+  if not ok then
+    error("error building initial plugins: " .. tostring(err))
+  end
 
   -- run plugins init_worker context
   ok, err = runloop.update_plugins_iterator()
