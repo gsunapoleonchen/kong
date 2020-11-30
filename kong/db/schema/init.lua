@@ -648,7 +648,7 @@ Schema.entity_checkers = {
 
   distinct = {
     run_with_missing_fields = false,
-    run_with_invalid_fields = true,
+    run_with_invalid_fields = false,
     fn = function(entity, field_names)
       local seen = {}
       for _, name in ipairs(field_names) do
